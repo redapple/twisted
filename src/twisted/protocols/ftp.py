@@ -27,6 +27,7 @@ from twisted.internet import reactor, interfaces, protocol, error, defer
 from twisted.protocols import basic, policies
 
 from twisted.python import log, failure, filepath
+from twisted.python.compat import xrange, nativeString, networkString
 
 from twisted.cred import error as cred_error, portal, credentials, checkers
 
@@ -419,7 +420,7 @@ class DTP(protocol.Protocol, object):
         @param line: The line to be sent.
         @type line: L{bytes}
         """
-        self.transport.write(line + '\r\n')
+        self.transport.write(networkString(line + '\r\n'))
 
 
     def _formatOneListResponse(self, name, size, directory, permissions, hardlinks, modified, owner, group):
@@ -681,7 +682,7 @@ class FileConsumer(object):
 class FTPOverflowProtocol(basic.LineReceiver):
     """FTP mini-protocol for when there are too many connections."""
     def connectionMade(self):
-        self.sendLine(RESPONSE[TOO_MANY_CONNECTIONS])
+        self.sendLine(networkString(RESPONSE[TOO_MANY_CONNECTIONS]))
         self.transport.loseConnection()
 
 
@@ -737,6 +738,11 @@ class FTP(basic.LineReceiver, policies.TimeoutMixin, object):
 
     listenFactory = reactor.listenTCP
 
+    def sendLine(self, line):
+        if line is None:
+            return
+        super(FTP, self).sendLine(networkString(line))
+
     def reply(self, key, *args):
         msg = RESPONSE[key] % args
         self.sendLine(msg)
@@ -770,7 +776,8 @@ class FTP(basic.LineReceiver, policies.TimeoutMixin, object):
             if err.check(FTPCmdError):
                 self.sendLine(err.value.response())
             elif (err.check(TypeError) and
-                  err.value.args[0].find('takes exactly') != -1):
+                  ((err.value.args[0].find('takes exactly') != -1) or
+                    err.value.args[0].find('required positional argument') != -1)):
                 self.reply(SYNTAX_ERR, "%s requires an argument." % (cmd,))
             else:
                 log.msg("Unexpected FTP error")
@@ -787,6 +794,7 @@ class FTP(basic.LineReceiver, policies.TimeoutMixin, object):
             if not self.disconnected:
                 self.resumeProducing()
 
+        line = nativeString(line)
         spaceIndex = line.find(' ')
         if spaceIndex != -1:
             cmd = line[:spaceIndex]
@@ -806,7 +814,6 @@ class FTP(basic.LineReceiver, policies.TimeoutMixin, object):
 
 
     def processCommand(self, cmd, *params):
-
         def call_ftp_command(command):
             method = getattr(self, "ftp_" + command, None)
             if method is not None:
@@ -2407,8 +2414,8 @@ def decodeHostPort(line):
 
     @return: a 2-tuple of (host, port).
     """
-    abcdef = re.sub('[^0-9, ]', '', line)
-    parsed = [int(p.strip()) for p in abcdef.split(',')]
+    abcdef = re.sub(b'[^0-9, ]', b'', line)
+    parsed = [int(p.strip()) for p in abcdef.split(b',')]
     for x in parsed:
         if x < 0 or x > 255:
             raise ValueError("Out of range", line, x)
@@ -2488,7 +2495,7 @@ class FTPClientBasic(basic.LineReceiver):
         """
         if line is None:
             return
-        basic.LineReceiver.sendLine(self, line)
+        basic.LineReceiver.sendLine(self, networkString(line))
 
     def sendNextCommand(self):
         """
@@ -2575,7 +2582,7 @@ class FTPClientBasic(basic.LineReceiver):
             # Avoid sending PASS if the response to USER is 230.
             # (ref: http://cr.yp.to/ftp/user.html#user)
             def cancelPasswordIfNotNeeded(response):
-                if response[0].startswith('230'):
+                if response[0].startswith(b'230'):
                     # No password needed!
                     self.actionQueue.remove(passwordCmd)
                 return response
@@ -2599,14 +2606,13 @@ class FTPClientBasic(basic.LineReceiver):
 
         # Bail out if this isn't the last line of a response
         # The last line of response starts with 3 digits followed by a space
-        codeIsValid = re.match(r'\d{3} ', line)
+        codeIsValid = re.match(br'\d{3} ', line)
         if not codeIsValid:
             return
 
         code = line[0:3]
-
         # Ignore marks
-        if code[0] == '1':
+        if code[0:1] == b'1':
             return
 
         # Check that we were expecting a response
@@ -2619,10 +2625,10 @@ class FTPClientBasic(basic.LineReceiver):
         self.response = []
 
         # Look for a success or error code, and call the appropriate callback
-        if code[0] in ('2', '3'):
+        if code[0:1] in (b'2', b'3'):
             # Success
             self.nextDeferred.callback(response)
-        elif code[0] in ('4', '5'):
+        elif code[0:1] in (b'4', b'5'):
             # Failure
             self.nextDeferred.errback(failure.Failure(CommandFailed(response)))
         else:
@@ -3085,7 +3091,7 @@ class FTPClient(FTPClientBasic):
         def cbParse(result):
             try:
                 # The only valid code is 257
-                if int(result[0].split(' ', 1)[0]) != 257:
+                if int(result[0].split(b' ', 1)[0]) != 257:
                     raise ValueError
             except (IndexError, ValueError):
                 return failure.Failure(CommandFailed(result))
@@ -3155,7 +3161,7 @@ class FTPFileListProtocol(basic.LineReceiver):
         r'(?P<date>...\s+\d+\s+[\d:]+)\s+(?P<filename>.{1,}?)'
         r'( -> (?P<linktarget>[^\r]*))?\r?$'
     )
-    delimiter = '\n'
+    delimiter = b'\n'
 
     def __init__(self):
         self.files = []
@@ -3227,7 +3233,7 @@ def parsePWDResponse(response):
 
     If I can't find the path, I return L{None}.
     """
-    match = re.search('"(.*)"', response)
+    match = re.search(b'"(.*)"', response)
     if match:
         return match.groups()[0]
     else:
