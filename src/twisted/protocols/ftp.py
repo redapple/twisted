@@ -3156,10 +3156,10 @@ class FTPFileListProtocol(basic.LineReceiver):
     @ivar files: list of dicts describing the files in this listing
     """
     fileLinePattern = re.compile(
-        r'^(?P<filetype>.)(?P<perms>.{9})\s+(?P<nlinks>\d*)\s*'
-        r'(?P<owner>\S+)\s+(?P<group>\S+)\s+(?P<size>\d+)\s+'
-        r'(?P<date>...\s+\d+\s+[\d:]+)\s+(?P<filename>.{1,}?)'
-        r'( -> (?P<linktarget>[^\r]*))?\r?$'
+        br'^(?P<filetype>.)(?P<perms>.{9})\s+(?P<nlinks>\d*)\s*'
+        br'(?P<owner>\S+)\s+(?P<group>\S+)\s+(?P<size>\d+)\s+'
+        br'(?P<date>...\s+\d+\s+[\d:]+)\s+(?P<filename>.{1,}?)'
+        br'( -> (?P<linktarget>[^\r]*))?\r?$'
     )
     delimiter = b'\n'
 
@@ -3187,11 +3187,11 @@ class FTPFileListProtocol(basic.LineReceiver):
             return None
         else:
             d = match.groupdict()
-            d['filename'] = d['filename'].replace(r'\ ', ' ')
+            d['filename'] = d['filename'].replace(br'\ ', b' ')
             d['nlinks'] = int(d['nlinks'])
             d['size'] = int(d['size'])
             if d['linktarget']:
-                d['linktarget'] = d['linktarget'].replace(r'\ ', ' ')
+                d['linktarget'] = d['linktarget'].replace(br'\ ', b' ')
             return d
 
     def addFile(self, info):
