@@ -1428,8 +1428,6 @@ class FTPFileListingTests(unittest.TestCase):
 
 class FTPClientFailedRETRAndErrbacksUponDisconnectTests(unittest.TestCase):
 
-    skip = "FTPClientFailedRETRAndErrbacksUponDisconnectTests blocking?"
-
     def testFailedRETR(self):
         f = protocol.Factory()
         f.noisy = 0
@@ -1437,18 +1435,18 @@ class FTPClientFailedRETRAndErrbacksUponDisconnectTests(unittest.TestCase):
         self.addCleanup(port.stopListening)
         portNum = port.getHost().port
         # This test data derived from a bug report by ranty on #twisted
-        responses = ['220 ready, dude (vsFTPd 1.0.0: beat me, break me)',
+        responses = [b'220 ready, dude (vsFTPd 1.0.0: beat me, break me)',
                      # USER anonymous
-                     '331 Please specify the password.',
+                     b'331 Please specify the password.',
                      # PASS twisted@twistedmatrix.com
-                     '230 Login successful. Have fun.',
+                     b'230 Login successful. Have fun.',
                      # TYPE I
-                     '200 Binary it is, then.',
+                     b'200 Binary it is, then.',
                      # PASV
-                     '227 Entering Passive Mode (127,0,0,1,%d,%d)' %
+                     b'227 Entering Passive Mode (127,0,0,1,%d,%d)' %
                      (portNum >> 8, portNum & 0xff),
                      # RETR /file/that/doesnt/exist
-                     '550 Failed to open file.']
+                     b'550 Failed to open file.']
         f.buildProtocol = lambda addr: PrintLines(responses)
 
         cc = protocol.ClientCreator(reactor, ftp.FTPClient, passive=1)
